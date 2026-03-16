@@ -2,7 +2,7 @@
 本当に最小のAI - たった1層のニューラルネットワーク
 
 仕組み: 「直前の8文字」→「次の1文字」を予測する
-（旧バージョンは1文字→1文字だった）
+（最小verは1文字→1文字だった）
 """
 
 import torch
@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # --- ハイパーパラメータ ---
-block_size = 8   # 一度に見る文字数（旧バージョンは1）
+block_size = 8   # 一度に見る文字数（最小verは1）
 n_embd = 8       # 各文字を表すベクトルの次元数
 
 # --- 学習データ ---
@@ -25,8 +25,8 @@ to_c = {i: c for i, c in enumerate(chars)}
 print(f"文字数: {len(text)}  語彙: {vocab}種 {chars}")
 
 # --- 学習データを作る ---
-# 旧: (1文字, 次の1文字) のペア
-# 新: (8文字, それぞれの次の1文字) のペア
+# 最小ver: (1文字, 次の1文字) のペア
+# 文脈付与ver: (8文字, それぞれの次の1文字) のペア
 #
 # 例: 入力 "ももたろうはもも" → 正解 "もたろうはももか"
 #     位置1の"も"→正解"も", 位置2の"も"→正解"た", ... 位置8の"も"→正解"か"
@@ -42,7 +42,7 @@ print(f"学習サンプル数: {X.shape[0]}  入力の形: {list(X.shape)}")
 
 # --- モデル: Token Embedding + Positional Embedding → Linear ---
 tok_emb = nn.Embedding(vocab, n_embd)       # 各文字を8次元のベクトルに変換
-pos_emb = nn.Embedding(block_size, n_embd)  # 各位置を8次元のベクトルに変換【新規】
+pos_emb = nn.Embedding(block_size, n_embd)  # 各位置を8次元のベクトルに変換（文脈付与verで追加）
 net = nn.Linear(n_embd, vocab)              # そのベクトルから次の文字を予測
 loss_fn = nn.CrossEntropyLoss()
 all_params = list(tok_emb.parameters()) + list(pos_emb.parameters()) + list(net.parameters())
@@ -52,12 +52,12 @@ params = sum(p.numel() for p in all_params)
 print(f"パラメータ数: {params}\n")
 
 # --- 学習 ---
-positions = torch.arange(block_size)  # [0, 1, 2, 3, 4, 5, 6, 7]
+positions = torch.arange(block_size)  # rangeのPyTorch版 → tensor([0, 1, 2, 3, 4, 5, 6, 7])
 
 for step in range(300):
     t = tok_emb(X)                # 文字→ベクトル  (サンプル数, 8, 8)
-    p = pos_emb(positions)        # 位置→ベクトル  (8, 8) 【新規】
-    x = t + p                     # 合体           (サンプル数, 8, 8) 【新規】
+    p = pos_emb(positions)        # 位置→ベクトル  (8, 8)
+    x = t + p                     # 合体           (サンプル数, 8, 8)
     pred = net(x)                 # 予測           (サンプル数, 8, vocab)
     B, T, V = pred.shape
     loss = loss_fn(pred.view(B*T, V), Y.view(B*T))  # 全位置まとめて誤差計算
